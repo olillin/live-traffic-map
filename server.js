@@ -1,91 +1,126 @@
-const express = require('express');
-const path = require('path');
-const fs = require('fs');
-const oauth2 = require('@badgateway/oauth2-client');
-require('dotenv').config();
+const express = require('express')
+const oauth2 = require('@badgateway/oauth2-client')
 
-const app = express();
-
-if (!(process.env.CLIENT_ID && process.env.CLIENT_SECRET)) {
-    console.error("Missing credentials!");
-    process.exit();
+// Create API client
+const { CLIENT_ID, CLIENT_SECRET } = process.env
+if (!(CLIENT_ID && CLIENT_SECRET)) {
+    console.error('Missing API credentials')
+    process.exit()
 }
 
 const client = new oauth2.OAuth2Client({
-    server: "https://ext-api.vasttrafik.se/pr/v4/",
-    clientId: process.env.CLIENT_ID,
-    clientSecret: process.env.CLIENT_SECRET,
-    tokenEndpoint: "/token"
-});
+    server: 'https://ext-api.vasttrafik.se/pr/v4/',
+    clientId: CLIENT_ID,
+    clientSecret: CLIENT_SECRET,
+    tokenEndpoint: '/token',
+})
 
-async function fetch_map_data() {
-    const lowerLeftLat = 56.1496278;
-    const lowerLeftLong = 10.2134046;
-    const upperRightLat = 60.670150574324886;
-    const upperRightLong = 17.148177023103646;
+const bounds = [56.1496278, 10.2134046, 60.670150574324886, 17.148177023103646]
+
+/**
+ * Take bounds and a list of positions and partition into optimized zones.
+ * The zones are optimized to contain as many positions as possible below the zoneCapacity.
+ *
+ * Boundaries (both input and output) take the form [lowerLeftLat, lowerLeftLong, upperRightLat, upperRightLong]
+ *
+ * @param {number[]} bounds
+ * @param {Array<[number, number]>} positions
+ * @param {number} zoneCapacity The max positions that a zone may contain
+ */
+function generateZones(bounds, positions, zoneCapacity) {
+    const boundsHeight = Math.abs(bounds[2] - bounds[0])
+    const boundsWidth = Math.abs(bounds[3] - bounds[1])
+    const gridSize = Math.ceil(Math.sqrt(positions.length / zoneCapacity))
+    const gridPartitionLatitude = boundsHeight / gridSize
+    const gridPartitionLongitude = boundsWidth / gridSize
+
+    const zones = []
+    for (let i = 0; i < gridSize; i++) {
+        for (let j = 0; j < gridSize; j++) {
+            zones.push([
+                bounds[0] + gridPartitionLatitude * i, //
+                bounds[1] + gridPartitionLongitude * j,
+                bounds[0] + gridPartitionLatitude * (i + 1),
+                bounds[1] + gridPartitionLongitude * (j + 1),
+            ])
+        }
+    }
+    return zones
+}
+
+async function fetchMapData() {
+    const lowerLeftLat = bounds[0]
+    const lowerLeftLong = bounds[1]
+    const upperRightLat = bounds[2]
+    const upperRightLong = bounds[3]
     let token = await client.clientCredentials()
-    
-    let sumData = []
+
+    let positionData = []
     let promises = []
     const partitions = 6
     for (let y = 0; y < partitions; y++) {
-        let lowerLat = lowerLeftLat + ((upperRightLat-lowerLeftLat)/partitions)*y
-        let upperLat = lowerLeftLat + ((upperRightLat-lowerLeftLat)/partitions)*(y+1)
+        let lowerLat = lowerLeftLat + ((upperRightLat - lowerLeftLat) / partitions) * y
+        let upperLat = lowerLeftLat + ((upperRightLat - lowerLeftLat) / partitions) * (y + 1)
         for (let x = 0; x < partitions; x++) {
-            let lowerLong = lowerLeftLong + ((upperRightLong-lowerLeftLong)/partitions)*x
-            let upperLong = lowerLeftLong + ((upperRightLong-lowerLeftLong)/partitions)*(x+1)
+            let lowerLong = lowerLeftLong + ((upperRightLong - lowerLeftLong) / partitions) * x
+            let upperLong = lowerLeftLong + ((upperRightLong - lowerLeftLong) / partitions) * (x + 1)
 
             let url = `https://ext-api.vasttrafik.se/pr/v4/positions?lowerLeftLat=${lowerLat}&lowerLeftLong=${lowerLong}&upperRightLat=${upperLat}&upperRightLong=${upperLong}&limit=200`
-    
+
             try {
                 await fetch(url, {
-                        method: 'get',
-                        headers: {
-                            'Authorization': 'Bearer ' + token.accessToken
+                    method: 'get',
+                    headers: {
+                        Authorization: 'Bearer ' + token.accessToken,
+                    },
+                })
+                    .then(res => {
+                        const responseType = res.headers.get('content-type')
+                        if (!responseType?.includes('application/json')) {
+                            console.error('Response not JSON')
+                            res.text().then(text => console.log(text))
+                        } else {
+                            let j = res.json()
+                            promises.push(j)
+                            return j
                         }
-                    })
-                    .then(req => {
-                        let j = req.json();
-                        promises.push(j);
-                        return j;
                     })
                     .then(data => {
                         if (data.length == 200) {
-                            console.warn(`[WARN] Position request limit possibly exceeded`);
+                            console.warn(`[WARN] Position request limit possibly exceeded`)
                         }
-                        sumData = Array.prototype.concat(sumData, data);
-                    });
-            } catch(error) {
-                console.log("Failed to fetch map data");
-                console.error(error);
+                        positionData = Array.prototype.concat(positionData, data)
+                    })
+            } catch (error) {
+                console.log('Failed to fetch map data')
+                console.error(error)
             }
         }
     }
 
-    await Promise.all(promises);
-    console.log("Total vehicles: " + sumData.length);
-    return sumData;
+    await Promise.all(promises)
+    console.log('Total vehicles: ' + positionData.length)
+    return positionData
 }
 
-app.get("/", (req, res) => {
-    res.sendFile(path.join(__dirname, "index.html"));
-});
+// Create server
+const app = express()
 
-app.get("/livemap/data", (req, res) => {
-    fetch_map_data().then(data => {
-        res.send(data);
-    });
-});
+app.use('/', express.static('./public'))
 
-const whitelist = ["style.css", "script.js"];
-whitelist.forEach(file => {
-    app.get("/" + file, (req, res) => {
-        res.sendFile(path.join(__dirname, file));
-        res.statusCode = 200;
-    });
-});
+app.get('/livemap/data', (req, res) => {
+    fetchMapData().then(data => {
+        res.send(data)
+    })
+})
 
-const port = process.env.PORT || 8080;
-app.listen(port);
+app.get('/livemap/zones', async (req, res) => {
+    const postitionData = (await fetchMapData()).map(i => [i.latitude, i.longitude])
+    const zones = generateZones(bounds, postitionData, 100)
+    res.json(zones)
+})
 
-console.log(`Started server at http://localhost:${port}`);
+const port = process.env.PORT || 8080
+app.listen(port)
+
+console.log(`Listening on port ${port}`)

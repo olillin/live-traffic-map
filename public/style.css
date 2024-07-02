@@ -1,6 +1,7 @@
 body {
     margin: 0;
     overflow: hidden;
+    font-family: sans-serif;
 }
 
 #map {
@@ -34,8 +35,26 @@ button {
     color: white;
     border-style: none;
     border-radius: 10px;
+    user-select: none;
 }
 
 button::hover {
     background-color: blue;
+}
+
+.buttons {
+    display: flex;
+    flex-flow: column nowrap;
+    gap: 0.25em;
+}
+
+.buttons > span {
+    display: flex;
+    justify-content: space-between;
+}
+
+.buttons > span > label {
+    flex-grow: 1;
+    padding-right: 0.5em;
+    user-select: none;
 }
