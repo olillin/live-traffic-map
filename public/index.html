@@ -11,21 +11,25 @@
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
             integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
             crossorigin=""></script>
-    <script src="script.js"></script>
     <link rel="stylesheet" href="style.css">
+    <script src="./liveMap.js"></script>
 </head>
 
-<body onload="load()">
+<body>
     <div class="menu">
-        <button onclick="update()">Update</button>
+        <button id="update">Update</button>
         <div class="buttons">
             <span>
                 <label for="markers_check">Vehicle markers</label>
-                <input type="checkbox" name="MarkersCheckbox" id="markers_check" checked>
+                <input type="checkbox" name="markers_check" id="markers_check" checked>
             </span>
             <span>
-                <label for="lines_check">Lines</label>
-                <input type="checkbox" name="LinesCheckbox" id="lines_check" checked>
+                <label for="routes_check">Vehicle routes</label>
+                <input type="checkbox" name="routes_check" id="routes_check" checked>
+            </span>
+            <span>
+                <label for="zones_check">Zones</label>
+                <input type="checkbox" name="zones_check" id="zones_check" checked>
             </span>
         </div>
     </div>
