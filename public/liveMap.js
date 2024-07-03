@@ -729,7 +729,7 @@ class Marker {
             .bindPopup(this.name)
 
         // Linemarker
-        fetch(`/livemap/data/${response.detailsReference}`)
+        fetch(`/api/details?detailsReference=${response.detailsReference}`)
             .then(res => {
                 res.json()
             })
@@ -791,7 +791,7 @@ function drawPartitions() {
 function updateVehicles() {
     return new Promise((resolve, reject) => {
         console.log('Updating...')
-        fetch('/livemap/data')
+        fetch('/api/positions')
             .catch(() => {
                 reject('Unable to update, please try again later')
             })
@@ -826,7 +826,7 @@ function updateVehicles() {
 function updateZones() {
     return new Promise(resolve => {
         console.log('Updating zones...')
-        fetch('/livemap/zones')
+        fetch('/api/zones')
             .then(res => res.json())
             .then(zones => {
                 zones.forEach(zone => {
