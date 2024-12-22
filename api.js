@@ -62,7 +62,7 @@ API.get('/zones', (req, res) => {
 /** @type {oauth2.OAuth2Token?} */
 var token = null
 async function authorizedFetch(url, options) {
-    if (!token || token.expiresAt <= currentUnixTimestamp) {
+    if (!token || token.expiresAt <= currentUnixTimestamp()) {
         token = await client.clientCredentials()
     }
     if (options == undefined) {
